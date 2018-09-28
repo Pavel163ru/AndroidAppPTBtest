@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Тест ПТБ</string>
+    <string name="info">Вопрос 7 из 16. Верные ответы 5 из 6</string>
+    <string name="question">Умный и сложный вопрос</string>
+    <string name="button">Продолжить</string>
+    <string name="wrong">ОШИБКА!</string>
+    <string name="right">ВЕРНО!</string>
+</resources>
