@@ -29,7 +29,6 @@ import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.Date;
 import java.util.Locale;
 import java.util.Random;
@@ -60,12 +59,14 @@ public class MainActivity extends AppCompatActivity {
 
     private String fileQuiz; //file with questions convert to string for next operation with it
     private Question newQuestion; //class for make question
-    private int countTest = 0; //number questions was show on display
+    //private int countTest = 0; //number questions was show on display
     private int countPassQuestions = 0; //count number question pass right now
     private int rightAnswers = 0; //count right answers on questions
 
     ArrayList<Integer> pointQuestions = new ArrayList<>(); //array with all start point questions
-    ArrayList<Boolean> arrayRepeat = new ArrayList<>(); //array for off repeat questions
+    private int currentPointQuestion;
+    //ArrayList<Boolean> arrayRepeat = new ArrayList<>(); //array for off repeat questions
+    private int numberQuestions = 0; //общее количество вопросов
 
     ArrayList<Integer> pointQuestionsGrade0 = new ArrayList<>();
     ArrayList<Integer> pointQuestionsGrade1 = new ArrayList<>();
@@ -109,6 +110,7 @@ public class MainActivity extends AppCompatActivity {
             //randomIndexQuestion();
             //drawQuestion();
 
+            /*
             //for only one time show each quiz
             int index = randomIndexQuestion();
             boolean repeat = arrayRepeat.get(index);
@@ -131,12 +133,36 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
             }
+            */
+            //готовим случайный вопрос
+            int index;
+            if(pointQuestions.size()>1){
+                Random random = new Random();
+                int max = pointQuestions.size()-1;
+                int min = 0;
+                index = random.nextInt(((max-min)+1)+min);
+            }else if(pointQuestions.size()==1){
+                index = 0;
+            }else{
+                //countTest = 0;
+                countPassQuestions = 0;
+                rightAnswers = 0;
+                index = 0;
+                log("Pass all quiz, start from first question");
+                searchAllQuestions();
+            }
+            log("Random index = "+index+" of "+pointQuestions.size());
+            currentPointQuestion = pointQuestions.get(index);
+            pointQuestions.remove(index);
+            log("There are "+pointQuestions.size()+" questions left");
+
 
             //newQuestion = makeQuiz(randomPointQuestion(),fileQuiz);
-            newQuestion = makeQuiz(pointQuestions.get(index),fileQuiz);
-            arrayRepeat.set(index, true); //mark pass quiz
+            //newQuestion = makeQuiz(pointQuestions.get(index),fileQuiz);
+            newQuestion = makeQuiz(currentPointQuestion,fileQuiz);
+            //arrayRepeat.set(index, true); //mark pass quiz
             drawQuestion(newQuestion);
-            countTest++;
+            //countTest++;
 
 
         }else{
@@ -146,6 +172,7 @@ public class MainActivity extends AppCompatActivity {
 
 
             //log how more quiz left
+            /*
             int countQuizForShow=0;
             for(int i=0; arrayRepeat.size()>i; i++){
                 if(!arrayRepeat.get(i)){
@@ -153,6 +180,7 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
             log("quiz left: "+countQuizForShow);
+            */
         }
         viewNewQuestion = !viewNewQuestion;
         drawInfo();
@@ -177,6 +205,8 @@ public class MainActivity extends AppCompatActivity {
 
         ArrayList[] arrayLists = new ArrayList[]{pointQuestionsGrade0, pointQuestionsGrade1,
                 pointQuestionsGrade2,pointQuestionsGrade3,pointQuestionsGrade4,pointQuestionsGrade5};
+        //long[] timeInteval = new long[]{0, 20, }; //
+
 
         for (int i=0; i<6; i++){
             arrayLists[i].clear();
@@ -199,6 +229,8 @@ public class MainActivity extends AppCompatActivity {
         dbHelper.close();
     }
 
+    //запуск сканирования файлов с вопросами и создание таблицы с оценками
+    //выполняется при первом запуске
     void firstStartMakeSQLiteTable (){
         SQLiteDatabase sqLiteDatabase = dbHelper.getWritableDatabase();
 
@@ -595,7 +627,7 @@ public class MainActivity extends AppCompatActivity {
             chLookFor = fileQuiz.charAt(i);
             if ((chLookFor=='?')&&newLine){
                 pointQuestions.add(i);
-                arrayRepeat.add(false); //add repeat mark
+                //arrayRepeat.add(false); //add repeat mark
             }else if (chLookFor=='\n'){
                 newLine=true;
             }else if (chLookFor!=' '){
@@ -603,7 +635,8 @@ public class MainActivity extends AppCompatActivity {
             }
 
         }
-        Log.i(TAG, "Вопросов найдено : "+pointQuestions.size());
+        numberQuestions = pointQuestions.size();
+        Log.i(TAG, "Вопросов найдено : "+numberQuestions);
     }
     void log(String text){
         Log.i(TAG,text);
@@ -647,7 +680,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    //todo new draw for question class
+    // new draw for question class
     @SuppressLint("ResourceType")
     void drawQuestion (Question question){
         if (question!=null){
@@ -729,7 +762,7 @@ public class MainActivity extends AppCompatActivity {
             result = " ("+((rightAnswers)*100/countPassQuestions)+"%)";
         }else result = " ";
 
-        info = "Вопрос "+countTest+" из "+pointQuestions.size()+". Верных ответов "+rightAnswers+result;
+        info = "Вопрос "+(numberQuestions-pointQuestions.size())+" из "+numberQuestions+". Верных ответов "+rightAnswers+result;
         mTvInfo.setText(info);
     }
 
