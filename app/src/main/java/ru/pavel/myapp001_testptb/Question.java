@@ -3,6 +3,7 @@ package ru.pavel.myapp001_testptb;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Created by Pavel on 20.01.2018.
@@ -13,10 +14,11 @@ public class Question implements Serializable {
     String answer; //один ответ для передачи
     int grade; //текущая оценка
     long lastdate; //дата последнего показа
-    int startpoint; //начальная позиция для считывания вопросов и ответов
+    int position; //начальная позиция для считывания вопросов и ответов
 
     ArrayList<String> answers = new ArrayList<>(); //Массив ответов
     ArrayList<Boolean> answersMark = new ArrayList<>(); //Массив меток правильного ответа
+    //List<Answer> answers;
     //int answerIndex;
     int answerQuantity;
 
