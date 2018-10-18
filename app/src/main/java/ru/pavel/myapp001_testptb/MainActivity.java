@@ -3,6 +3,7 @@ package ru.pavel.myapp001_testptb;
 import android.annotation.SuppressLint;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.Resources;
@@ -10,9 +11,12 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.graphics.Color;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
@@ -34,17 +38,18 @@ import java.util.Locale;
 import java.util.Random;
 
 
+
 public class MainActivity extends AppCompatActivity {
 
     //private static final String FILENAME = "file";
     private static final String TAG = "MyApp";
     private static final String FILE_NAME = "quiz.txt";
 
-    static final String MENU_TEST = "test";
-    static final String MENU_TEACH = "teach";
-    static final String MENU_EXIT = "exit";
-    static final String MENU_STATISTIC = "statistic";
-    static final String MENU_SETTINGS = "settings";
+    static final int MENU_TEST = 1;
+    static final int MENU_TEACH = 2;
+    static final int MENU_EXIT = 0;
+    static final int MENU_STATISTIC = 3;
+    static final int MENU_SETTINGS = 4;
     static final String MENU_RESULT = "result";
 
     static final String PREF_SCANNED = "scanned"; //boolean
@@ -52,10 +57,11 @@ public class MainActivity extends AppCompatActivity {
     private SharedPreferences sharedPreferences;
     boolean prefScanned = false;
 
-    static final String DB_STARTPOINT = "startpoint";
-    static final String DB_GRADE = "grade";
-    static final String DB_DATE = "lastdate";
-    static final String DB_NAME = "grades";
+    final String DB_STARTPOINT = "startpoint";
+    final String DB_GRADE = "grade";
+    final String DB_DATE = "lastdate";
+    final String DB_MILLIS_DATE = "millis_date";
+    final String DB_NAME = "grades";
 
     private String fileQuiz; //file with questions convert to string for next operation with it
     private Question newQuestion; //class for make question
@@ -65,6 +71,8 @@ public class MainActivity extends AppCompatActivity {
 
     ArrayList<Integer> pointQuestions = new ArrayList<>(); //array with all start point questions
     private int currentPointQuestion;
+    private int currentGrade;
+    private int currentMode = 1;
     //ArrayList<Boolean> arrayRepeat = new ArrayList<>(); //array for off repeat questions
     private int numberQuestions = 0; //общее количество вопросов
 
@@ -98,13 +106,19 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onClick(View view) {
             log("Button pressed");
-            loopLogic();
+
+
+            //loopTeachMode();
+            //loopLogic();
+            modeSwitch();
         }
     };
 
+    //todo всплывающее окно с результатом теста и началом нового
     //method unity all logic program. Draw new question and draw right answer
     void loopLogic(){
 
+        //проверяем нужно выводить новый вопрос или проверить ответ пользователя
         if (viewNewQuestion){
             //doQuiz(pointQuestions.get(randomIndexQuestion()));
             //randomIndexQuestion();
@@ -159,9 +173,11 @@ public class MainActivity extends AppCompatActivity {
 
             //newQuestion = makeQuiz(randomPointQuestion(),fileQuiz);
             //newQuestion = makeQuiz(pointQuestions.get(index),fileQuiz);
-            newQuestion = makeQuiz(currentPointQuestion,fileQuiz);
+
+            newQuestion = makeQuiz(currentPointQuestion,fileQuiz);//создаем вопрос с ответами
             //arrayRepeat.set(index, true); //mark pass quiz
-            drawQuestion(newQuestion);
+
+            drawQuestion(newQuestion);//выводим вопрос на экран
             //countTest++;
 
 
@@ -187,9 +203,34 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
+    //todo проверить работоспсобность
+    //сохраняем новую оценку и время в таблицу
+    void saveCurrentGrade(){
+        SQLiteDatabase sqLiteDatabase = dbHelper.getWritableDatabase();
+
+        //поиск строки для изменения
+        String selection = DB_STARTPOINT+ " = ?";
+        String[] selectionArg = new String[]{String.valueOf(currentPointQuestion)};
+
+        ContentValues contentValues = new ContentValues();
+        long currentMillis = System.currentTimeMillis();
+        contentValues.put(DB_GRADE, currentGrade);
+        contentValues.put(DB_MILLIS_DATE, String.valueOf(currentMillis));
+
+        DateFormat df = new SimpleDateFormat("yyyy.MM.dd - HH:mm:ss", Locale.US);
+        String date = df.format(new Date());
+        contentValues.put(DB_DATE, date);
+
+        int result = sqLiteDatabase.update(DB_NAME, contentValues , selection, selectionArg);
+        log("Строк изменено = "+result);
+
+        dbHelper.close();
+    }
+
     void readGrades(){
         SQLiteDatabase sqLiteDatabase = dbHelper.getWritableDatabase();
         Cursor cursor;
+        /*
         cursor = sqLiteDatabase.query(DB_NAME, null, "grade = 3", null, null, null, null);
         if (cursor.moveToFirst()){
             log("question with grade = 1 was found");
@@ -201,31 +242,67 @@ public class MainActivity extends AppCompatActivity {
             log("grades 0 is "+pointQuestionsGrade0.size());
 
         }else log("there is not question with grade = 1");
+        */
 
-
+        //массив с позициями вопросов групированный по оценкам
         ArrayList[] arrayLists = new ArrayList[]{pointQuestionsGrade0, pointQuestionsGrade1,
                 pointQuestionsGrade2,pointQuestionsGrade3,pointQuestionsGrade4,pointQuestionsGrade5};
-        //long[] timeInteval = new long[]{0, 20, }; //
+        long[] timeIntervals = new long[]{0L, 20L, 180L, 1440L, 4320L, 43200L}; //задаем интервал повтора вопроса для каждой оценки
+        //получаем текущее время в милисекундах
+        long currentMillis = System.currentTimeMillis();
 
+        //экперименты с классом Date и форматированием даты
+        DateFormat df = new SimpleDateFormat("yyyy.MM.dd - HH:mm:ss", Locale.US);
+        Date inDate = new Date();
+        inDate.setTime(currentMillis);
+        String date = df.format(inDate);
+
+        log("Current time = "+currentMillis+" or date "+date);
 
         for (int i=0; i<6; i++){
             arrayLists[i].clear();
-            String selection = DB_GRADE + " = " + i;
-            cursor = sqLiteDatabase.query(DB_NAME, null, selection, null, null, null, null);
+
+            long timeInterval = currentMillis-(timeIntervals[i]*60000L);
+
+            inDate.setTime(timeInterval);
+            date = df.format(inDate);
+            log("Time interval = "+timeInterval+" or date "+date);
+
+            String selection = DB_GRADE + " = ? and "+DB_MILLIS_DATE+" < ?";
+            //log("searching "+String.valueOf(timeInterval));
+            String[] selectionArg = new String[]{String.valueOf(i), String.valueOf(timeInterval)};
+
+            cursor = sqLiteDatabase.query(DB_NAME, null, selection, selectionArg, null, null, null);
             if (cursor.moveToFirst()){
                 do{
                     arrayLists[i].add(cursor.getInt(cursor.getColumnIndex(DB_STARTPOINT)));
                 }while(cursor.moveToNext());
             }
+            cursor.close();
         }
 
         for (int i=0; i<6; i++){
             log("Questions with grade "+ i +" is "+arrayLists[i].size());
         }
+        log("Quantity questions = "+(pointQuestionsGrade0.size()+pointQuestionsGrade1.size()
+                +pointQuestionsGrade2.size()+pointQuestionsGrade3.size()+pointQuestionsGrade4.size()+pointQuestionsGrade5.size()));
+
+        /*проврка считывания таблицы
+        cursor = sqLiteDatabase.query(DB_NAME, null, null, null, null, null, null);
+        ArrayList<Integer> testArray = new ArrayList<>();
+        if(cursor.moveToFirst()){
+            int point;
+            do{
+                point = cursor.getInt(cursor.getColumnIndex(DB_STARTPOINT));
+                testArray.add(point);
+                log("Read point "+point);
+            }while(cursor.moveToNext());
+            log("test read database, read "+testArray.size()+" row");
+        }
+        */
 
 
-
-        cursor.close();
+        //cursor.close();
         dbHelper.close();
     }
 
@@ -244,19 +321,24 @@ public class MainActivity extends AppCompatActivity {
         DateFormat df = new SimpleDateFormat("dd.MM.yyyy - HH:mm:ss", Locale.US);
         String date = df.format(new Date());
 
+        long millis = System.currentTimeMillis();
+        String millisString = millis+"";
+
         ContentValues contentValues = new ContentValues();
         for (Integer point: pointQuestions){
             contentValues.put(DB_STARTPOINT, point);
 
-            /*
+            //todo убрать случайную генерацию оценок
             Random rand = new Random();
             int max = 5;
             int min = 0;
             int random = rand.nextInt(((max-min)+1)+min);
-            */
+            random = 0;
 
-            contentValues.put(DB_GRADE, 0);
+
+            contentValues.put(DB_GRADE, random);
             contentValues.put(DB_DATE, date);
+            contentValues.put(DB_MILLIS_DATE, millisString);
             sqLiteDatabase.insert(DB_NAME, null, contentValues);
         }
         dbHelper.close();
@@ -276,11 +358,13 @@ public class MainActivity extends AppCompatActivity {
             int nameColIndex = c.getColumnIndex("grade");
             int numberColIndex = c.getColumnIndex("startpoint");
             int dateColIndex = c.getColumnIndex("lastdate");
+            int millisColIndex = c.getColumnIndex(DB_MILLIS_DATE);
             do {
                 log("ID = " + c.getInt(idColIndex) +
                         ", grade = " + c.getInt(nameColIndex) +
                         ", point = " + c.getInt(numberColIndex)+
-                        ", date = " + c.getString(dateColIndex));
+                        ", date = " + c.getString(dateColIndex)+
+                        ", millis = " + c.getString(millisColIndex));
             } while (c.moveToNext());
         } else  log("0 rows");
         c.close();
@@ -366,8 +450,8 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        Intent intent = new Intent(this, MainMenu.class);
-        startActivityForResult(intent, 1);
+        //Intent intent = new Intent(this, MainMenu.class);
+        //startActivityForResult(intent, 1);
 
         mTvInfo = (TextView) findViewById(R.id.mTvInfo);
         mTvQuestion = findViewById(R.id.mTvQuestin);
@@ -388,10 +472,8 @@ public class MainActivity extends AppCompatActivity {
 
         //writeFile();
 
-        fileQuiz = readQuizRaw();
-        searchAllQuestions();
 
-        loopLogic();
+
 
         //newQuestion = makeQuiz(randomPointQuestion(),fileQuiz);
         //drawQuestion(newQuestion);
@@ -402,18 +484,21 @@ public class MainActivity extends AppCompatActivity {
 
         mButton.setOnClickListener(onClickNextButton);
 
+        fileQuiz = readQuizRaw(); //читаем файл с вопросами
+
+
         // создаем объект для создания и управления версиями БД
         dbHelper = new DBHelper(this);
 
+        startApp();
+
         //проверка sqlite, сохранение, чтение и т.д.
         //testSQLite(dbHelper);
-        loadPrefs();
-        if(!prefScanned){
-            log("Launch first scanning ...");
-            firstStartMakeSQLiteTable();
-        }
-        printSQLiteTable();
-        readGrades();
+
+
+
+        //loopTeachMode();//режим обечения
+        //loopLogic();//запуск тестирования
     }
 
     //test write file
@@ -468,7 +553,7 @@ public class MainActivity extends AppCompatActivity {
     String readQuizRaw(){
         String text = null;
         Resources res = this.getResources();
-        InputStream file = res.openRawResource(R.raw.quiz1);
+        InputStream file = res.openRawResource(R.raw.quizall);
         try {
             byte[] bytes = new byte[file.available()];
             file.read(bytes);
@@ -621,12 +706,15 @@ public class MainActivity extends AppCompatActivity {
     //pointQuestions ArrayList
     void searchAllQuestions(){
         log("Search questions ...");
+        pointQuestions.clear();
+
         boolean newLine = true;
         char chLookFor;
         for (int i=1; i<fileQuiz.length(); i++){
             chLookFor = fileQuiz.charAt(i);
             if ((chLookFor=='?')&&newLine){
                 pointQuestions.add(i);
+                //log("point found = "+i);
                 //arrayRepeat.add(false); //add repeat mark
             }else if (chLookFor=='\n'){
                 newLine=true;
@@ -658,6 +746,177 @@ public class MainActivity extends AppCompatActivity {
     int randomPointQuestion(){
         int random = pointQuestions.get(randomIndexQuestion());
         return random;
+    }
+
+    //todo добавить всплывающее окно когда вопросы закончатся
+    void loopTeachMode(){
+        if(viewNewQuestion){
+            Random random = new Random();
+            int max = 100;
+            int min = 0;
+            int randomNumber = random.nextInt(((max-min)+1)+min);
+            log("Random grade = "+randomNumber);
+
+            do { //немного криво написанное сканирование, нужно будет доработать
+                if (randomNumber > 40 && !(pointQuestionsGrade1.size() == 0)) {
+                    //оценка 1
+                    currentPointQuestion = pointQuestionsGrade1.get(pointQuestionsGrade1.size() - 1);
+                    pointQuestionsGrade1.remove(pointQuestionsGrade1.size() - 1);
+                    randomNumber = 150;
+                } else if (randomNumber > 20 && !(pointQuestionsGrade0.size() == 0)) {
+                    //grade 0
+                    currentPointQuestion = pointQuestionsGrade0.get(pointQuestionsGrade0.size() - 1);
+                    pointQuestionsGrade0.remove(pointQuestionsGrade0.size() - 1);
+                    randomNumber = 150;
+                } else if (randomNumber > 10 && !(pointQuestionsGrade2.size() == 0)) {
+                    //grade 2
+                    currentPointQuestion = pointQuestionsGrade2.get(pointQuestionsGrade2.size() - 1);
+                    pointQuestionsGrade2.remove(pointQuestionsGrade2.size() - 1);
+                    randomNumber = 150;
+                } else if (randomNumber > 5 && !(pointQuestionsGrade3.size() == 0)) {
+                    //grade 3
+                    currentPointQuestion = pointQuestionsGrade3.get(pointQuestionsGrade3.size() - 1);
+                    pointQuestionsGrade3.remove(pointQuestionsGrade3.size() - 1);
+                    randomNumber = 150;
+                } else if (randomNumber > 2 && !(pointQuestionsGrade4.size() == 0)) {
+                    //grade 4
+                    currentPointQuestion = pointQuestionsGrade4.get(pointQuestionsGrade4.size() - 1);
+                    pointQuestionsGrade4.remove(pointQuestionsGrade4.size() - 1);
+                    randomNumber = 150;
+                } else if (!(pointQuestionsGrade5.size() == 0)) {
+                    //grade 5
+                    currentPointQuestion = pointQuestionsGrade5.get(pointQuestionsGrade5.size() - 1);
+                    pointQuestionsGrade5.remove(pointQuestionsGrade5.size() - 1);
+                    randomNumber = 150;
+                } else {
+
+                    //todo реализовать сценарий когда вопросы для обучения закончились
+
+                    if(randomNumber==101){
+                        log("There isn't more question for teaching");
+                        randomNumber = 150;//завершаем поиск
+
+                        //Если больше нет вопросов выкидываем сообщение
+                        AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+                        builder.setMessage("Вопросы для обучения закончились").setTitle("Запустить Тест?");
+
+                        // Add the buttons
+                        builder.setPositiveButton("Тестирование", new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog, int id) {
+                                // User clicked OK button
+                                currentMode = 1;
+                                startApp();
+                                return;
+                            }
+                        });
+                        builder.setNegativeButton("Выход", new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog, int id) {
+                                // User cancelled the dialog
+                                finish();
+                            }
+                        });
+                        // Set other dialog properties
+
+
+                        // Create the AlertDialog
+                        AlertDialog dialog = builder.create();
+                        dialog.show();
+                    }else{
+                        randomNumber = 101;//проверяем все оставшиеся вопросы
+                        log("let's try to find another question");
+                    }
+                }
+            }while(randomNumber!=150);
+
+            log("Grades 5*="+pointQuestionsGrade5.size()+" 4*="+pointQuestionsGrade4.size()
+                    +" 3*="+pointQuestionsGrade3.size()+" 2*="+pointQuestionsGrade2.size()
+                    +" 1*="+pointQuestionsGrade1.size()+" 0*="+pointQuestionsGrade0.size());
+
+            readCurrentGrade();
+
+            newQuestion = makeQuiz(currentPointQuestion,fileQuiz);//создаем вопрос с ответами
+            drawQuestion(newQuestion);//выводим вопрос на экран
+
+        }else{
+            boolean result = checkAnswersAndDrawRight(newQuestion);
+            if(result){
+                changeCurrentGrade(1);
+            }else{
+                changeCurrentGrade(-1);
+            }
+            saveCurrentGrade();
+        }
+        viewNewQuestion = !viewNewQuestion;
+        drawTeachInfo();
+    }
+    void startApp(){
+        viewNewQuestion = true;
+        countPassQuestions = 0;
+        rightAnswers = 0;
+
+        searchAllQuestions(); //поиск всех вопросов в файле
+        loadPrefs(); //загрузка настроек программы
+        if(!prefScanned){
+            log("Launch first scanning ...");
+            firstStartMakeSQLiteTable();//создание базы данных с оценками при первом запуске
+        }
+
+        printSQLiteTable();//проверочная печать базы данных
+        readGrades(); //чтение оценок из базы данных
+        modeSwitch(); //запуск логики приложения в первый раз
+    }
+
+    void modeSwitch(){
+        switch (currentMode){
+            case 1:
+                loopLogic();
+                break;
+            case 2:
+                loopTeachMode();
+                break;
+            case 0:
+                finish();
+                break;
+            default:
+                break;
+        }
+    }
+    void readCurrentGrade (){
+
+        SQLiteDatabase sqLiteDatabase = dbHelper.getReadableDatabase();
+        Cursor cursor;
+        String selection = DB_STARTPOINT + " = ?";
+        String[] selectionArg = new String[]{String.valueOf(currentPointQuestion)};
+        //String[] columns = new String[]{DB_GRADE};
+        log("current point = "+currentPointQuestion);
+
+        cursor = sqLiteDatabase.query(DB_NAME,null , selection, selectionArg, null, null, null);
+
+        cursor.moveToFirst();
+        currentGrade = cursor.getInt(cursor.getColumnIndex(DB_GRADE));
+        log("Current grade "+currentGrade);
+
+        cursor.close();
+        dbHelper.close();
+    }
+
+    //меняем оценку
+    void changeCurrentGrade(int value){
+        if(value==1){
+            if(currentGrade==0){
+                currentGrade = 2;//
+            }else if(currentGrade<5) {
+                currentGrade += 1;
+            }
+        }else if(value==-1){
+            if(currentGrade > 3){
+                currentGrade = 1;
+            }else if(currentGrade>1){
+                currentGrade -= 1;
+            }
+        }else{
+            log("Ошибка ввода!!! оценка не изменена");
+        }
     }
 
     @Deprecated
@@ -727,11 +986,14 @@ public class MainActivity extends AppCompatActivity {
 
         return choice;
     }
+
+    //проверяем ответ, выводим верное решение
+    //возвращаем результат ответа
     @SuppressLint("ResourceType")
     boolean checkAnswersAndDrawRight (Question question){
         boolean correctAnswer;
         boolean checkAnswer;
-        boolean choice = true;
+        boolean choice = true; //результат Истина - правильный
         for (int i=0;(i<mChAnswers.length)&&(i<question.getAnswerQuantity());i++){
             checkAnswer = mChAnswers[i].isChecked();
             correctAnswer = question.getАnswerMark(i);
@@ -751,7 +1013,6 @@ public class MainActivity extends AppCompatActivity {
             mTvWrong.setVisibility(View.VISIBLE);
         }
 
-
         return choice;
     }
 
@@ -763,6 +1024,15 @@ public class MainActivity extends AppCompatActivity {
         }else result = " ";
 
         info = "Вопрос "+(numberQuestions-pointQuestions.size())+" из "+numberQuestions+". Верных ответов "+rightAnswers+result;
+        mTvInfo.setText(info);
+    }
+    void drawTeachInfo (){
+        String info;
+        int quantity = (pointQuestionsGrade0.size()+pointQuestionsGrade1.size()
+                +pointQuestionsGrade2.size()+pointQuestionsGrade3.size()
+                +pointQuestionsGrade4.size()+pointQuestionsGrade5.size());
+
+        info = "Осталось: "+quantity+" вопр. Оценка: "+currentGrade+"*  ";
         mTvInfo.setText(info);
     }
 
@@ -780,23 +1050,65 @@ public class MainActivity extends AppCompatActivity {
         log("Prefs saved");
     }
 
+    void changeDBgrades(int point, int grade, String millisDate){
+        SQLiteDatabase sqLiteDatabase = dbHelper.getWritableDatabase();
+        ContentValues contentValues = new ContentValues();
+        contentValues.put(DB_GRADE, grade);
+        contentValues.put(DB_MILLIS_DATE, millisDate);
+
+        String whereClause = DB_STARTPOINT+" = ?";
+        String[] whereArgs = new String[]{point+""};
+
+        sqLiteDatabase.update(DB_NAME, contentValues, whereClause, whereArgs);
+
+        dbHelper.close();
+    }
+
     //обработка результата работы со вторым Активити
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (data == null){return;}
-        String result = data.getStringExtra(MainActivity.MENU_RESULT);
+        int result = data.getIntExtra(MainActivity.MENU_RESULT, 0);
         //выход
-        if (result.equals(MainActivity.MENU_EXIT)){
+        if (result==MainActivity.MENU_EXIT){
             this.finish();
         }
     }
 
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        menu.add(Menu.NONE, 101, Menu.NONE, "Тестирование");
+        menu.add(Menu.NONE, 102, Menu.NONE, "Обучение");
+        menu.add(Menu.NONE,100,Menu.NONE, "Выход");
+
+        return super.onCreateOptionsMenu(menu);
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()){
+            case 101:
+                currentMode = 1;
+                startApp();
+                break;
+            case 102:
+                currentMode = 2;
+                startApp();
+                break;
+            case 100:
+                currentMode = 0;
+                modeSwitch();
+                break;
+
+        }
+        return super.onOptionsItemSelected(item);
+    }
 
     //используем sqlite
     class DBHelper extends SQLiteOpenHelper {
         public DBHelper(Context context){
-            super(context, "myDB", null, 1);
+            super(context, "myDB", null, 2);
         }
 
         @Override
@@ -812,11 +1124,16 @@ public class MainActivity extends AppCompatActivity {
                     + "id integer primary key autoincrement,"
                     + "startpoint integer,"
                     + "grade integer,"
-                    + "lastdate text"+ ");");
+                    + "lastdate text,"
+                    + "millis_date text"+ ");"); //создаем таблицу с рейтингом вопросов
         }
 
         @Override
         public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+            if(newVersion == 2){
+                log("--- onUpgrade database v2---");
+                db.execSQL("ALTER TABLE grades ADD COLUMN millis_date text");
+            }
 
         }
     }
